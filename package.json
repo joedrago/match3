@@ -16,7 +16,8 @@
     "url": "ssh://git@stash.corp.netflix.com:7999/~jdrago/novacompile.git"
   },
   "scripts": {
-    "build": "cake build"
+    "build": "cake build",
+    "serve": "phonegap serve"
   },
   "devDependencies": {
     "browserify": "^13.1.1",
