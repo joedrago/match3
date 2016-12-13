@@ -1,0 +1,28 @@
+{
+  "name": "match3",
+  "description": "Match3",
+  "keywords": [
+    "game",
+    "match3"
+  ],
+  "author": "Joe Drago",
+  "version": "0.0.1",
+  "license": "BSL-1.0",
+  "engines": {
+    "node": ">=0.8.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@stash.corp.netflix.com:7999/~jdrago/novacompile.git"
+  },
+  "scripts": {
+    "build": "cake build"
+  },
+  "devDependencies": {
+    "browserify": "^13.1.1",
+    "coffee-script": "1.9.3",
+    "coffeeify": "^2.1.0",
+    "node-watch": "^0.4.1",
+    "uglifyify": "^3.0.4"
+  }
+}
