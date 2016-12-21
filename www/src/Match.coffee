@@ -34,6 +34,9 @@ class Match
     @newGame()
 
   newGame: ->
+    @dragStartX = null
+    @dragStartY = null
+
     if @grid
       for i in [0...@gridCX]
         for j in [0...@gridCY]
@@ -49,11 +52,16 @@ class Match
 
   update: ->
 
-  screenToGrid: (x, y) ->
+  screenToGrid: (x, y, nearest=false) ->
     g =
       x: Math.floor((x - @gridX) / @gemSize)
       y: Math.floor((y - @gridY) / @gemSize)
-    if (g.x < 0) or (g.x >= @gridCX) or (g.y < 0) or (g.y >= @gridCY)
+    if nearest
+      g.x = Math.max(g.x, 0)
+      g.x = Math.min(g.x, @gridCX - 1)
+      g.y = Math.max(g.y, 0)
+      g.y = Math.min(g.y, @gridCY - 1)
+    else if (g.x < 0) or (g.x >= @gridCX) or (g.y < 0) or (g.y >= @gridCY)
       return null
     return g
 
@@ -64,19 +72,99 @@ class Match
       y: Math.floor(y * @gemSize) + @gridY
     return p
 
+  swapChain: (startX, startY, endX, endY, draggingStart=false) ->
+    x = startX
+    y = startY
+    deltaX = endX - x
+    deltaY = endY - y
+    deltaX = Math.max(deltaX, -1)
+    deltaX = Math.min(deltaX, 1)
+    deltaY = Math.max(deltaY, -1)
+    deltaY = Math.min(deltaY, 1)
+    while (x != endX) or (y != endY)
+      newX = x + deltaX
+      newY = y + deltaY
+      # console.log "SWAP #{x} #{y} <-> #{newX} #{newY}"
+      temp = @grid[x][y]
+      @grid[x][y] = @grid[newX][newY]
+      @grid[newX][newY] = temp
+      if @grid[x][y] != null
+        @grid[x][y].x = x
+        @grid[x][y].y = y
+      if @grid[newX][newY] != null
+        @grid[newX][newY].x = newX
+        @grid[newX][newY].y = newY
+      @moveGemHome(x, y)
+      if not draggingStart
+        @moveGemHome(newX, newY)
+      x = newX
+      y = newY
+
   onDown: (p) ->
     # console.log "down", [p.x,p.y,p.screenX,p.screenY]
     g = @screenToGrid(p.x, p.y)
-    if g != null
-      @emitScoreParticle(g.x, g.y, 0, 100)
-      @breakGem(g.x, g.y)
-      @spawnGems()
-    else
+    if g == null
       console.log "bad coord"
-    # @newGame()
+      return
+
+    if @grid[g.x][g.y] != null
+      console.log "enabling drag on #{g.x} #{g.y}"
+      sprite = @grid[g.x][g.y].sprite
+      sprite.input.enableDrag(true)
+      sprite.events.onDragUpdate.add (sprite, pointer, dragX, dragY, snapPoint) =>
+        # Have to add half a gem because dragX/Y is the topleft of the dragged gem
+        @onOver(Math.floor(dragX + (@gemSize / 2)), Math.floor(dragY + (@gemSize / 2)))
+      @dragStartX = @dragX = g.x
+      @dragStartY = @dragY = g.y
+
+    # @emitScoreParticle(g.x, g.y, 0, 100)
+    # @breakGem(g.x, g.y)
+    # @spawnGems()
+
+  onOver: (x, y) ->
+    if (@dragStartX == null) or (@dragStartY == null)
+      return
+
+    g = @screenToGrid(x, y, true)
+    deltaX = Math.abs(g.x - @dragStartX)
+    deltaY = Math.abs(g.y - @dragStartY)
+    if (deltaX == 0) and (deltaY == 0)
+      return
+
+    if deltaX < deltaY
+      g.x = @dragStartX
+      if @dragX != @dragStartX
+        console.log "rewinding drag X #{deltaX} #{deltaY}"
+        @rewindDrag()
+    else
+      g.y = @dragStartY
+      if @dragY != @dragStartY
+        console.log "rewinding drag Y #{deltaX} #{deltaY}"
+        @rewindDrag()
+
+    @swapChain(@dragX, @dragY, g.x, g.y, true)
+    @dragX = g.x
+    @dragY = g.y
 
   onUp: (p) ->
     # console.log "up", [p.x,p.y,p.screenX,p.screenY]
+    @rewindDrag()
+    @finishDrag()
+
+  finishDrag: ->
+    if (@dragX != null) and (@dragY != null) and (@grid[@dragX][@dragY] != null)
+      @grid[@dragX][@dragY].sprite.input.enableDrag(false)
+      @grid[@dragX][@dragY].sprite.events.onDragUpdate.removeAll()
+    @dragStartX = @dragX = null
+    @dragStartY = @dragY = null
+
+  rewindDrag: ->
+    if (@dragStartX != null) and (@dragStartY != null)
+      console.log "moving (#{@dragX}, #{@dragY}) home (#{@dragStartX}, #{@dragStartY})"
+      @swapChain(@dragX, @dragY, @dragStartX, @dragStartY)
+      @moveGemHome(@dragStartX, @dragStartY)
+      @dragX = @dragStartX
+      @dragY = @dragStartY
 
   breakGem: (x, y) ->
     console.log "breakGem(#{x}, #{y})"
@@ -116,6 +204,20 @@ class Match
     # TODO: Decide based on current gem distribution
     return Math.floor(Math.random() * 8)
 
+  moveGemHome: (gx, gy, bounce=false) ->
+    gem = @grid[gx][gy]
+    if gem == null
+      return
+
+    x = @gridX + (gx * @gemSize)
+    y = @gridY + (gy * @gemSize)
+    easing = Phaser.Easing.Linear.None
+    speed = 100
+    if bounce
+      easing = Phaser.Easing.Bounce.Out
+      speed = 400
+    @game.add.tween(gem.sprite).to({ x: x, y: y }, speed, easing, true)
+
   spawnGems: ->
     # drop gems from higher up slots down
     newGrid = Array(@gridCX)
@@ -139,11 +241,9 @@ class Match
         if gem == null
           continue
         if (gem.x != i) or (gem.y != j)
-          x = @gridX + (i * @gemSize)
-          y = @gridY + (j * @gemSize)
-          @game.add.tween(gem.sprite).to({ x: x, y: y }, 400, Phaser.Easing.Bounce.Out, true)
           gem.x = i
           gem.y = j
+          @moveGemHome(i, j, true)
 
     # drop from the top
     for i in [0...@gridCX]
@@ -155,6 +255,7 @@ class Match
           sprite = @game.add.sprite(x, y - @gridH, 'gems', @gemArtIndex(gemType, false))
           sprite.width = @gemSize
           sprite.height = @gemSize
+          sprite.inputEnabled = true
           @game.world.sendToBack(sprite)
           @game.add.tween(sprite).to({ y: y }, 400, Phaser.Easing.Bounce.Out, true)
           @grid[i][j] =
