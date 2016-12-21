@@ -46,19 +46,26 @@ class Match
 
   update: ->
 
-  screenToGrid: (p) ->
+  screenToGrid: (x, y) ->
     g =
-      x: Math.floor((p.x - @gridX) / @gemSize)
-      y: Math.floor((p.y - @gridY) / @gemSize)
-
+      x: Math.floor((x - @gridX) / @gemSize)
+      y: Math.floor((y - @gridY) / @gemSize)
     if (g.x < 0) or (g.x >= @gridCX) or (g.y < 0) or (g.y >= @gridCY)
       return null
     return g
 
+  gridToScreen: (x, y) ->
+    console.log
+    p =
+      x: Math.floor(x * @gemSize) + @gridX
+      y: Math.floor(y * @gemSize) + @gridY
+    return p
+
   onDown: (p) ->
     # console.log "down", [p.x,p.y,p.screenX,p.screenY]
-    g = @screenToGrid(p)
+    g = @screenToGrid(p.x, p.y)
     if g != null
+      @emitScoreParticle(g.x, g.y, 0, 100)
       @breakGem(g.x, g.y)
       @spawnGems()
     else
@@ -91,6 +98,16 @@ class Match
     index += power
     return index
 
+  emitScoreParticle: (gridX, gridY, type, score) ->
+    p = @gridToScreen(gridX, gridY)
+    style = { font: "bold 16px Arial", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle" }
+    text = @game.add.text(p.x, p.y, ""+score, style)
+    text.setShadow(3, 3, 'rgba(0,0,0,0.5)', 2)
+    text.setTextBounds(0, 0, @gemSize, @gemSize);
+    @game.add.tween(text).to({ y: p.y - (@gemSize / 4), alpha: 0 }, 1000, Phaser.Easing.Quartic.In, true)
+    @game.add.tween(text.scale).to({ x: 2, y: 2 }, 1000, Phaser.Easing.Linear.None, true)
+    @game.time.events.add 1000, ->
+      text.destroy()
 
   bestGemToSpawn: ->
     # TODO: Decide based on current gem distribution
@@ -135,6 +152,7 @@ class Match
           sprite = @game.add.sprite(x, y - @gridH, 'gems', @gemArtIndex(gemType, false))
           sprite.width = @gemSize
           sprite.height = @gemSize
+          @game.world.sendToBack(sprite)
           @game.add.tween(sprite).to({ y: y }, 400, Phaser.Easing.Bounce.Out, true)
           @grid[i][j] =
             x: i
