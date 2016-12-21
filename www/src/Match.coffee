@@ -16,17 +16,20 @@ class Match
 
   create: ->
     console.log "Match.create(): #{window.innerWidth}x#{window.innerHeight}"
-
-    @game.input.onDown.add (p) => @onDown(p)
-    @game.input.onUp.add (p) => @onUp(p)
-
     @screenW = window.innerWidth
     @screenH = window.innerHeight
+    if @screenW > @screenH
+      @screenW = Math.floor(@screenH / 16 * 9)
+    console.log "created screen #{@screenW}x#{@screenH}"
+
     @gemSize = @screenW / @gridCX
     @gridW = @gemSize * @gridCX
     @gridH = @gemSize * @gridCY
     @gridX = 0
     @gridY = ((@screenH - (@gemSize * @gridCY)) - @gemSize) >> 1
+
+    @game.input.onDown.add (p) => @onDown(p)
+    @game.input.onUp.add (p) => @onUp(p)
 
     @newGame()
 
