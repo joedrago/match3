@@ -72,7 +72,7 @@ class Match
       y: Math.floor(y * @gemSize) + @gridY
     return p
 
-  swapChain: (startX, startY, endX, endY, draggingStart=false) ->
+  swapChain: (startX, startY, endX, endY, dragging=false) ->
     x = startX
     y = startY
     deltaX = endX - x
@@ -95,7 +95,7 @@ class Match
         @grid[newX][newY].x = newX
         @grid[newX][newY].y = newY
       @moveGemHome(x, y)
-      if not draggingStart
+      if not dragging
         @moveGemHome(newX, newY)
       x = newX
       y = newY
@@ -135,12 +135,12 @@ class Match
       g.x = @dragStartX
       if @dragX != @dragStartX
         console.log "rewinding drag X #{deltaX} #{deltaY}"
-        @rewindDrag()
+        @rewindDrag(true)
     else
       g.y = @dragStartY
       if @dragY != @dragStartY
         console.log "rewinding drag Y #{deltaX} #{deltaY}"
-        @rewindDrag()
+        @rewindDrag(true)
 
     @swapChain(@dragX, @dragY, g.x, g.y, true)
     @dragX = g.x
@@ -158,11 +158,12 @@ class Match
     @dragStartX = @dragX = null
     @dragStartY = @dragY = null
 
-  rewindDrag: ->
+  rewindDrag: (dragging=false) ->
     if (@dragStartX != null) and (@dragStartY != null)
       console.log "moving (#{@dragX}, #{@dragY}) home (#{@dragStartX}, #{@dragStartY})"
-      @swapChain(@dragX, @dragY, @dragStartX, @dragStartY)
-      @moveGemHome(@dragStartX, @dragStartY)
+      @swapChain(@dragX, @dragY, @dragStartX, @dragStartY, dragging)
+      if not dragging
+        @moveGemHome(@dragStartX, @dragStartY)
       @dragX = @dragStartX
       @dragY = @dragStartY
 
