@@ -108,7 +108,7 @@ class Match
       return
 
     if @grid[g.x][g.y] != null
-      console.log "enabling drag on #{g.x} #{g.y}"
+      # console.log "enabling drag on #{g.x} #{g.y}"
       sprite = @grid[g.x][g.y].sprite
       sprite.input.enableDrag(true)
       sprite.events.onDragUpdate.add (sprite, pointer, dragX, dragY, snapPoint) =>
@@ -129,27 +129,37 @@ class Match
     deltaX = Math.abs(g.x - @dragStartX)
     deltaY = Math.abs(g.y - @dragStartY)
     if (deltaX == 0) and (deltaY == 0)
+      if (@dragX != @dragStartX) or (@dragY != @dragStartY)
+        @rewindDrag()
+        @findMatches()
+      return
+    if (g.x == @dragX) and (g.y == @dragY)
       return
 
     if deltaX < deltaY
       g.x = @dragStartX
       if @dragX != @dragStartX
-        console.log "rewinding drag X #{deltaX} #{deltaY}"
+        # console.log "rewinding drag X #{deltaX} #{deltaY}"
         @rewindDrag(true)
     else
       g.y = @dragStartY
       if @dragY != @dragStartY
-        console.log "rewinding drag Y #{deltaX} #{deltaY}"
+        # console.log "rewinding drag Y #{deltaX} #{deltaY}"
         @rewindDrag(true)
 
     @swapChain(@dragX, @dragY, g.x, g.y, true)
     @dragX = g.x
     @dragY = g.y
+    @findMatches()
 
   onUp: (p) ->
     # console.log "up", [p.x,p.y,p.screenX,p.screenY]
+    if (@dragStartX == null) or (@dragStartY == null)
+      return
+
     @rewindDrag()
     @finishDrag()
+    @resetHighlights()
 
   finishDrag: ->
     if (@dragX != null) and (@dragY != null) and (@grid[@dragX][@dragY] != null)
@@ -160,12 +170,73 @@ class Match
 
   rewindDrag: (dragging=false) ->
     if (@dragStartX != null) and (@dragStartY != null)
-      console.log "moving (#{@dragX}, #{@dragY}) home (#{@dragStartX}, #{@dragStartY})"
+      # console.log "moving (#{@dragX}, #{@dragY}) home (#{@dragStartX}, #{@dragStartY})"
       @swapChain(@dragX, @dragY, @dragStartX, @dragStartY, dragging)
       if not dragging
         @moveGemHome(@dragStartX, @dragStartY)
       @dragX = @dragStartX
       @dragY = @dragStartY
+
+  updateArt: (gx, gy) ->
+    if @grid[gx][gy] != null
+      gem = @grid[gx][gy]
+      art = @gemArtIndex(gem.type, (gem.match > 0), gem.power)
+      if gem.art != art
+        gem.art = art
+        gem.sprite.frame = art
+    return
+
+  resetHighlights: ->
+    for i in [0...@gridCX]
+      for j in [0...@gridCY]
+        if @grid[i][j] != null
+          @grid[i][j].match = 0
+          @updateArt(i, j)
+
+  addMatchStrip: (startX, startY, endX, endY, matchCount) ->
+    # console.log "addMatchStrip(#{startX}, #{startY}, #{endX}, #{endY})"
+    for x in [startX..endX]
+      for y in [startY..endY]
+        @grid[x][y].match += matchCount
+        @updateArt(x, y)
+
+  findMatches: ->
+    @resetHighlights()
+
+    # ew, copypasta
+    for i in [0...@gridCX]
+      lastType = -1
+      count = 0
+      for j in [0...@gridCY]
+        if lastType == @grid[i][j].type
+          count += 1
+        else
+          lastType = @grid[i][j].type
+          if count >= 3
+            @addMatchStrip(i, j - count, i, j - 1, count)
+          count = 1
+      if count >= 3
+        @addMatchStrip(i, j - count, i, j - 1, count)
+    for j in [0...@gridCY]
+      lastType = -1
+      count = 0
+      for i in [0...@gridCX]
+        if lastType == @grid[i][j].type
+          count += 1
+        else
+          lastType = @grid[i][j].type
+          if count >= 3
+            @addMatchStrip(i - count, j, i - 1, j, count)
+          count = 1
+      if count >= 3
+        @addMatchStrip(i - count, j, i - 1, j, count)
+
+    console.log "------------"
+    for j in [0...@gridCY]
+      line = ""
+      for i in [0...@gridCX]
+        line += "#{@grid[i][j].match} "
+      console.log "#{j} | #{line}"
 
   breakGem: (x, y) ->
     console.log "breakGem(#{x}, #{y})"
@@ -210,6 +281,8 @@ class Match
     if gem == null
       return
 
+    # console.log "moveGemHome(#{gx}, #{gy})"
+
     x = @gridX + (gx * @gemSize)
     y = @gridY + (gy * @gemSize)
     easing = Phaser.Easing.Linear.None
@@ -251,18 +324,24 @@ class Match
       for j in [0...@gridCY]
         if @grid[i][j] == null
           gemType = @bestGemToSpawn()
+          match = 0
+          power = false
           x = @gridX + (i * @gemSize)
           y = @gridY + (j * @gemSize)
-          sprite = @game.add.sprite(x, y - @gridH, 'gems', @gemArtIndex(gemType, false))
+          art = @gemArtIndex(gemType, (match > 0), power)
+          sprite = @game.add.sprite(x, y - @gridH, 'gems', art)
           sprite.width = @gemSize
           sprite.height = @gemSize
           sprite.inputEnabled = true
           @game.world.sendToBack(sprite)
           @game.add.tween(sprite).to({ y: y }, 400, Phaser.Easing.Bounce.Out, true)
           @grid[i][j] =
+            sprite: sprite
             x: i
             y: j
             type: gemType
-            sprite: sprite
+            match: match
+            power: power
+            art: art
 
 module.exports = Match
