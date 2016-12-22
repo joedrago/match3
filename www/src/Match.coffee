@@ -3,12 +3,14 @@ class Match
     @game = new Phaser.Game "100%", "100%", Phaser.CANVAS, 'phaser-example', {
       preload: => @preload()
       create:  => @create()
-      update:  => @update()
     }
 
     # Grid gem counts
     @gridCX = 8
     @gridCY = 7
+
+    @gemBounceSpeed = 400
+    @gemSwapSpeed = 100
 
   preload: ->
     console.log "Match.preload()"
@@ -27,6 +29,7 @@ class Match
     @gridH = @gemSize * @gridCY
     @gridX = 0
     @gridY = ((@screenH - (@gemSize * @gridCY)) - @gemSize) >> 1
+    @inputEnabled = false
 
     @game.input.onDown.add (p) => @onDown(p)
     @game.input.onUp.add (p) => @onUp(p)
@@ -48,11 +51,8 @@ class Match
       @grid[i] = Array(@gridCY)
       for j in [0...@gridCY]
         @grid[i][j] = null
-    @spawnGems()
-    @findMatches()
-    @breakGems()
 
-  update: ->
+    @think()
 
   screenToGrid: (x, y, nearest=false) ->
     g =
@@ -104,6 +104,9 @@ class Match
 
   onDown: (p) ->
     # console.log "down", [p.x,p.y,p.screenX,p.screenY]
+    if not @inputEnabled
+      return
+
     g = @screenToGrid(p.x, p.y)
     if g == null
       console.log "bad coord"
@@ -119,11 +122,14 @@ class Match
       @dragStartX = @dragX = g.x
       @dragStartY = @dragY = g.y
 
-    # @emitScoreParticle(g.x, g.y, 0, 100)
+    # @emitScoreParticle(g.x, g.y, 0, @gemSwapSpeed)
     # @breakGem(g.x, g.y)
     # @spawnGems()
 
   onOver: (x, y) ->
+    if not @inputEnabled
+      return
+
     if (@dragStartX == null) or (@dragStartY == null)
       return
 
@@ -156,6 +162,9 @@ class Match
 
   onUp: (p) ->
     # console.log "up", [p.x,p.y,p.screenX,p.screenY]
+    if not @inputEnabled
+      return
+
     if (@dragStartX == null) or (@dragStartY == null)
       return
 
@@ -170,6 +179,7 @@ class Match
     if (@dragX != null) and (@dragY != null) and (@grid[@dragX][@dragY] != null)
       @grid[@dragX][@dragY].sprite.input.enableDrag(false)
       @grid[@dragX][@dragY].sprite.events.onDragUpdate.removeAll()
+      @moveGemHome(@dragX, @dragY)
     @dragStartX = @dragX = null
     @dragStartY = @dragY = null
 
@@ -302,10 +312,10 @@ class Match
     x = @gridX + (gx * @gemSize)
     y = @gridY + (gy * @gemSize)
     easing = Phaser.Easing.Linear.None
-    speed = 100
+    speed = @gemSwapSpeed
     if bounce
       easing = Phaser.Easing.Bounce.Out
-      speed = 400
+      speed = @gemBounceSpeed
     @game.add.tween(gem.sprite).to({ x: x, y: y }, speed, easing, true)
 
   spawnGems: ->
@@ -336,9 +346,11 @@ class Match
           @moveGemHome(i, j, true)
 
     # drop from the top
+    spawnedGem = false
     for i in [0...@gridCX]
       for j in [0...@gridCY]
         if @grid[i][j] == null
+          spawnedGem = true
           gemType = @bestGemToSpawn()
           match = 0
           power = false
@@ -350,7 +362,7 @@ class Match
           sprite.height = @gemSize
           sprite.inputEnabled = true
           @game.world.sendToBack(sprite)
-          @game.add.tween(sprite).to({ y: y }, 400, Phaser.Easing.Bounce.Out, true)
+          @game.add.tween(sprite).to({ y: y }, @gemBounceSpeed, Phaser.Easing.Bounce.Out, true)
           @grid[i][j] =
             sprite: sprite
             x: i
@@ -359,5 +371,26 @@ class Match
             match: match
             power: power
             art: art
+
+    if spawnedGem
+      console.log "input disabled"
+      @inputEnabled = false
+      @thinkLater(@gemBounceSpeed)
+
+    return spawnedGem
+
+  thinkLater: (t) ->
+    @game.time.events.add t, =>
+      @think()
+
+  think: ->
+    console.log "think()"
+    if not @spawnGems()
+      @findMatches()
+      if @matchTotal > 0
+        @breakGems()
+      else
+        console.log "input enabled"
+        @inputEnabled = true
 
 module.exports = Match
