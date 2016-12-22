@@ -49,6 +49,8 @@ class Match
       for j in [0...@gridCY]
         @grid[i][j] = null
     @spawnGems()
+    @findMatches()
+    @breakGems()
 
   update: ->
 
@@ -157,9 +159,12 @@ class Match
     if (@dragStartX == null) or (@dragStartY == null)
       return
 
-    @rewindDrag()
+    if @matchTotal > 0
+      @breakGems()
+    else
+      @rewindDrag()
     @finishDrag()
-    @resetHighlights()
+    @resetMatches()
 
   finishDrag: ->
     if (@dragX != null) and (@dragY != null) and (@grid[@dragX][@dragY] != null)
@@ -186,7 +191,8 @@ class Match
         gem.sprite.frame = art
     return
 
-  resetHighlights: ->
+  resetMatches: ->
+    @matchTotal = 0
     for i in [0...@gridCX]
       for j in [0...@gridCY]
         if @grid[i][j] != null
@@ -197,11 +203,12 @@ class Match
     # console.log "addMatchStrip(#{startX}, #{startY}, #{endX}, #{endY})"
     for x in [startX..endX]
       for y in [startY..endY]
+        @matchTotal += matchCount
         @grid[x][y].match += matchCount
         @updateArt(x, y)
 
   findMatches: ->
-    @resetHighlights()
+    @resetMatches()
 
     # ew, copypasta
     for i in [0...@gridCX]
@@ -239,16 +246,19 @@ class Match
       console.log "#{j} | #{line}"
 
   breakGem: (x, y) ->
-    console.log "breakGem(#{x}, #{y})"
+    # console.log "breakGem(#{x}, #{y})"
     if @grid[x][y] != null
       @grid[x][y].sprite.destroy()
       @grid[x][y] = null
-    if (x > 0) and (@grid[x-1][y] != null)
-      @grid[x-1][y].sprite.destroy()
-      @grid[x-1][y] = null
-    if (x < @gridCX-1) and (@grid[x+1][y] != null)
-      @grid[x+1][y].sprite.destroy()
-      @grid[x+1][y] = null
+
+  breakGems: ->
+    for i in [0...@gridCX]
+      for j in [0...@gridCY]
+        gem = @grid[i][j]
+        if (gem != null) and (gem.match > 0)
+          @emitScoreParticle(i, j, gem.type, gem.match)
+          @breakGem(i, j)
+    @spawnGems()
 
   gemArtIndex: (type, highlight=false, power=0) ->
     index = switch type
@@ -262,8 +272,14 @@ class Match
     return index
 
   emitScoreParticle: (gridX, gridY, type, score) ->
+    # hack
+    textColor = "#fff"
+    if type == 0 # broken
+      score *= -1
+      textColor = "#f66"
+
     p = @gridToScreen(gridX, gridY)
-    style = { font: "bold 16px Arial", fill: "#fff", boundsAlignH: "center", boundsAlignV: "middle" }
+    style = { font: "bold 24px Arial", fill: textColor, boundsAlignH: "center", boundsAlignV: "middle" }
     text = @game.add.text(p.x, p.y, ""+score, style)
     text.setShadow(3, 3, 'rgba(0,0,0,0.5)', 2)
     text.setTextBounds(0, 0, @gemSize, @gemSize);
