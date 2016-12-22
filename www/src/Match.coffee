@@ -52,7 +52,17 @@ class Match
       for j in [0...@gridCY]
         @grid[i][j] = null
 
-    @think()
+    @spawnGems()
+    loop
+      @findMatches()
+      if @matchTotal > 0
+        @breakGems(true)
+        @spawnGems()
+      else
+        break
+
+    # TODO: reset score here
+    @chain = 1
 
   screenToGrid: (x, y, nearest=false) ->
     g =
@@ -121,10 +131,6 @@ class Match
         @onOver(Math.floor(dragX + (@gemSize / 2)), Math.floor(dragY + (@gemSize / 2)))
       @dragStartX = @dragX = g.x
       @dragStartY = @dragY = g.y
-
-    # @emitScoreParticle(g.x, g.y, 0, @gemSwapSpeed)
-    # @breakGem(g.x, g.y)
-    # @spawnGems()
 
   onOver: (x, y) ->
     if not @inputEnabled
@@ -261,13 +267,18 @@ class Match
       @grid[x][y].sprite.destroy()
       @grid[x][y] = null
 
-  breakGems: ->
+  breakGems: (newGame) ->
+    brokeOne = false
     for i in [0...@gridCX]
       for j in [0...@gridCY]
         gem = @grid[i][j]
         if (gem != null) and (gem.match > 0)
-          @emitScoreParticle(i, j, gem.type, gem.match)
+          if not newGame
+            @emitScoreParticle(i, j, gem.type, gem.match * @chain)
           @breakGem(i, j)
+          brokeOne = true
+    if brokeOne
+      @chain *= 10
     @spawnGems()
 
   gemArtIndex: (type, highlight=false, power=0) ->
@@ -392,5 +403,6 @@ class Match
       else
         console.log "input enabled"
         @inputEnabled = true
+        @chain = 1
 
 module.exports = Match
