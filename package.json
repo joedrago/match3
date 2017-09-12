@@ -11,10 +11,6 @@
   "engines": {
     "node": ">=0.8.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "ssh://git@stash.corp.netflix.com:7999/~jdrago/novacompile.git"
-  },
   "scripts": {
     "build": "cake build",
     "serve": "phonegap serve"
